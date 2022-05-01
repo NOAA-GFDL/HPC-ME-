@@ -1,0 +1,51 @@
+Bootstrap: docker
+From: ecpe4s/ubuntu20.04-oneapi-x86_64:22.02
+Stage: build
+
+%files
+spack_intel_ubuntu20.04_e4s.yaml /spack.yaml
+
+%post
+ export SPACK_DISABLE_LOCAL_CONFIG=1
+ export SPACK_USER_CACHE_PATH=/tmp/_spack_cache
+ . /spack/share/spack/setup-env.sh
+ spack -e . concretize -f | tee concretize.log
+ spack -e . buildcache keys -it
+ spack -e . install --cache-only
+ spack clean -a
+
+
+#build the model
+%post
+ cd /opt 
+ git clone --recursive https://github.com/NOAA-GFDL/AM4.git -b main 
+ cd AM4/exec 
+ . /opt/intel/oneapi/setvars.sh 
+ . /spack/share/spack/setup-env.sh 
+ spack compiler find 
+ spack load libtool 
+ spack load netcdf-fortran 
+ make HDF_INCLUDE=`pkg-config --cflags hdf5` HDF_LIBS="`pkg-config --libs hdf5` -lhdf5_fortran -lhdf5_hl -lhdf5_hl_fortran" BLD_TYPE=DEBUG 
+ cp am4_xanadu_2021.03.x /opt/AM4 
+ make clean_all
+
+
+#build 2-stage
+BootStrap: library
+from: ubuntu:20.04
+Stage: final
+
+%files from build 
+ /opt/AM4/am4_xanadu_2021.03.x /opt/AM4/am4_xanadu_2021.03.x
+
+%environment
+ export LD_LIBRARY_PATH=opt/intel/oneapi/lib/intel64:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib/pkgconfig:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/lib:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/lib:${LD_LIBRARY_PATH}
+
+ export PKG_CONFIG_PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib/pkgconfig:${PKG_CONFIG_PATH}
+
+ export PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/pkgconf-1.8.0-zvekjwu2ymhudks7qvhctp6oubet6qpw/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/bin:/opt/intel/oneapi/lib/intel64/bin:/opt/intel/oneapi/lib/intel64/libfabric/bin:${PATH}
+
+ export LIBRARY_PATH=${LD_LIBRARY_PATH}
+
+%run
+ /opt/AM4/am4_xanadu_2021.03.x
