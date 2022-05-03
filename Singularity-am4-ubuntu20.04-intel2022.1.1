@@ -13,10 +13,6 @@ spack_intel_ubuntu20.04_e4s.yaml /spack.yaml
  spack -e . buildcache keys -it
  spack -e . install --cache-only
  spack clean -a
-
-
-#build the model
-%post
  cd /opt 
  git clone --recursive https://github.com/NOAA-GFDL/AM4.git -b main 
  cd AM4/exec 
@@ -37,15 +33,34 @@ Stage: final
 
 %files from build 
  /opt/AM4/am4_xanadu_2021.03.x /opt/AM4/am4_xanadu_2021.03.x
+ /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid
+ /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc
+ /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned
+
+%post
+ apt-get update -y
+ apt-get install -y make
+ apt-get install -y wget
+ apt-get install -y sudo
+ apt-get install -y gpg
+ wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+ echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+ cd /opt
+ . /opt/intel/oneapi/setvars.sh
+ . /spack/share/spack/setup-env.sh
+ sudo apt-get update
+ sudo apt-get install -y intel-oneapi-runtime-libs
 
 %environment
  export LD_LIBRARY_PATH=opt/intel/oneapi/lib/intel64:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib/pkgconfig:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/lib:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/lib:${LD_LIBRARY_PATH}
-
  export PKG_CONFIG_PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib/pkgconfig:${PKG_CONFIG_PATH}
-
  export PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/pkgconf-1.8.0-zvekjwu2ymhudks7qvhctp6oubet6qpw/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/bin:/opt/intel/oneapi/lib/intel64/bin:/opt/intel/oneapi/lib/intel64/libfabric/bin:${PATH}
-
  export LIBRARY_PATH=${LD_LIBRARY_PATH}
+ export LIBRARY_PATH=${LD_LIBRARY_PATH}
+ export KMP_STACKSIZE=512m
+ export NC_BLKSZ=1M
+ export F_UFMTENDIAN=big
 
-%run
- /opt/AM4/am4_xanadu_2021.03.x
+#%run
+# ulimit -s unlimited
+# /opt/AM4/am4_xanadu_2021.03.x
