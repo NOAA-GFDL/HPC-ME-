@@ -5,9 +5,12 @@ Stage: build
 %files
 spack_intel_ubuntu20.04_e4s.yaml /spack.yaml
 
-%post
+%environment
  export SPACK_DISABLE_LOCAL_CONFIG=1
  export SPACK_USER_CACHE_PATH=/tmp/_spack_cache
+%post
+ bash -c ". /opt/intel/oneapi/setvars.sh"
+ touch /spack/share/spack/setup-env.sh
  . /spack/share/spack/setup-env.sh
  spack -e . concretize -f | tee concretize.log
  spack -e . buildcache keys -it
@@ -15,16 +18,12 @@ spack_intel_ubuntu20.04_e4s.yaml /spack.yaml
  spack clean -a
  cd /opt 
  git clone --recursive https://github.com/NOAA-GFDL/AM4.git -b main 
- cd AM4/exec 
- . /opt/intel/oneapi/setvars.sh 
- . /spack/share/spack/setup-env.sh 
- spack compiler find 
- spack load libtool 
- spack load netcdf-fortran 
+ cd AM4/exec
+ bash -c ". /opt/intel/oneapi/setvars.sh"
+ export PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/pkgconf-1.8.0-zvekjwu2ymhudks7qvhctp6oubet6qpw/bin:${PATH}
  make HDF_INCLUDE=`pkg-config --cflags hdf5` HDF_LIBS="`pkg-config --libs hdf5` -lhdf5_fortran -lhdf5_hl -lhdf5_hl_fortran" BLD_TYPE=DEBUG 
  cp am4_xanadu_2021.03.x /opt/AM4 
  make clean_all
-
 
 #build 2-stage
 BootStrap: library
