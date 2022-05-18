@@ -5,61 +5,75 @@ Stage: build
 %files
 spack_intel_ubuntu20.04_e4s.yaml /spack.yaml
 
-%environment
+%post
+# Use Spack cache to download the spack packages needed for building the model
  export SPACK_DISABLE_LOCAL_CONFIG=1
  export SPACK_USER_CACHE_PATH=/tmp/_spack_cache
-%post
- bash -c ". /opt/intel/oneapi/setvars.sh"
- touch /spack/share/spack/setup-env.sh
  . /spack/share/spack/setup-env.sh
  spack -e . concretize -f | tee concretize.log
  spack -e . buildcache keys -it
  spack -e . install --cache-only
  spack clean -a
- cd /opt 
- git clone --recursive https://github.com/NOAA-GFDL/AM4.git -b main 
- cd AM4/exec
- bash -c ". /opt/intel/oneapi/setvars.sh"
- export PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/pkgconf-1.8.0-zvekjwu2ymhudks7qvhctp6oubet6qpw/bin:${PATH}
- make HDF_INCLUDE=`pkg-config --cflags hdf5` HDF_LIBS="`pkg-config --libs hdf5` -lhdf5_fortran -lhdf5_hl -lhdf5_hl_fortran" BLD_TYPE=DEBUG 
- cp am4_xanadu_2021.03.x /opt/AM4 
- make clean_all
-
-#build 2-stage
-BootStrap: library
-from: ubuntu:20.04
-Stage: final
-
-%files from build 
- /opt/AM4/am4_xanadu_2021.03.x /opt/AM4/am4_xanadu_2021.03.x
- /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid
- /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc
- /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned /spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned
-
-%post
- apt-get update -y
- apt-get install -y make
- apt-get install -y wget
- apt-get install -y sudo
- apt-get install -y gpg
- wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
- echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+# Set up the compile script sc.sh
+## This is needed to source /opt/intel/oneapi/setvars.sh
  cd /opt
- . /opt/intel/oneapi/setvars.sh
- . /spack/share/spack/setup-env.sh
- sudo apt-get update
- sudo apt-get install -y intel-oneapi-runtime-libs
+ echo "#!/bin/bash -x" > sc.sh
+ echo "# Set up environment" >> sc.sh
+ echo . /opt/intel/oneapi/setvars.sh >> sc.sh
+ echo . /spack/share/spack/setup-env.sh >> sc.sh
+ echo spack compiler find >> sc.sh
+ echo spack load hdf5 >> sc.sh
+ echo spack load netcdf-c >> sc.sh
+ echo spack load netcdf-fortran >> sc.sh
+ echo spack load libtool >> sc.sh
+ echo "# Clone the AM4 and build" >> sc.sh
+ echo cd /opt >> sc.sh
+ echo git clone --recursive https://github.com/NOAA-GFDL/AM4.git -b main >> sc.sh
+ echo cd AM4/exec >> sc.sh
+ echo 'make HDF_INCLUDE=`pkg-config --cflags hdf5` HDF_LIBS="`pkg-config --libs hdf5` -lhdf5_fortran -lhdf5_hl -lhdf5_hl_fortran" BLD_TYPE=DEBUG' >> sc.sh
+ echo cp /opt/AM4/exec/am4_xanadu_2021.03.x /opt/AM4 >> sc.sh
+ echo make clean_all >> sc.sh
+## End of script
+# Run the compile script
+ chmod 777 sc.sh
+ ./sc.sh
 
+##############################################################################################
+## End of stage 1 of build
 %environment
- export LD_LIBRARY_PATH=opt/intel/oneapi/lib/intel64:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib/pkgconfig:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/lib:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/lib:${LD_LIBRARY_PATH}
- export PKG_CONFIG_PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/hdf5-1.10.7-t56dr5xsdtwkgsw6jy4uukaank5idrid/lib/pkgconfig:${PKG_CONFIG_PATH}
- export PATH=/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-fortran-4.5.3-dwekbcfxqslsewrwkm3a4wq7xx2nqned/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/pkgconf-1.8.0-zvekjwu2ymhudks7qvhctp6oubet6qpw/bin:/spack/opt/spack/linux-ubuntu20.04-x86_64/intel-2021.5.0/netcdf-c-4.8.0-ftcnwzsdgnc257ilko4yltvefjvwq6yc/bin:/opt/intel/oneapi/lib/intel64/bin:/opt/intel/oneapi/lib/intel64/libfabric/bin:${PATH}
- export LIBRARY_PATH=${LD_LIBRARY_PATH}
- export LIBRARY_PATH=${LD_LIBRARY_PATH}
- export KMP_STACKSIZE=512m
- export NC_BLKSZ=1M
- export F_UFMTENDIAN=big
-
-#%run
-# ulimit -s unlimited
-# /opt/AM4/am4_xanadu_2021.03.x
+  ACL_BOARD_VENDOR_PATH='/opt/Intel/OpenCLFPGA/oneAPI/Boards'
+  ADVISOR_2022_DIR='/opt/intel/oneapi/advisor/2022.0.0'
+  APM='/opt/intel/oneapi/advisor/2022.0.0/perfmodels'
+  CCL_CONFIGURATION='cpu_gpu_dpcpp'
+  CCL_ROOT='/opt/intel/oneapi/ccl/2021.5.1'
+  CLASSPATH='/opt/intel/oneapi/mpi/2021.5.1//lib/mpi.jar:/opt/intel/oneapi/dal/2021.5.3/lib/onedal.jar'
+  CLCK_ROOT='/opt/intel/oneapi/clck/2021.5.0'
+  CMAKE_PREFIX_PATH='/opt/intel/oneapi/vpl/2022.0.0:/opt/intel/oneapi/tbb/2021.5.1/env/..:/opt/intel/oneapi/dal/2021.5.3:/opt/intel/oneapi/compiler/2022.0.2/linux/IntelDPCPP'
+  CMPLR_ROOT='/opt/intel/oneapi/compiler/2022.0.2'
+  CONDA_DEFAULT_ENV='intelpython-python3.9'
+  CONDA_EXE='/opt/intel/oneapi/intelpython/latest/bin/conda'
+  CONDA_PREFIX='/opt/intel/oneapi/intelpython/latest'
+  CONDA_PROMPT_MODIFIER='(intelpython-python3.9) '
+  CONDA_PYTHON_EXE='/opt/intel/oneapi/intelpython/latest/bin/python'
+  CONDA_SHLVL='1'
+  CPATH='/opt/intel/oneapi/vpl/2022.0.0/include:/opt/intel/oneapi/tbb/2021.5.1/env/../include:/opt/intel/oneapi/mpi/2021.5.1//include:/opt/intel/oneapi/mkl/2022.0.2/include:/opt/intel/oneapi/ippcp/2021.5.1/include:/opt/intel/oneapi/ipp/2021.5.2/include:/opt/intel/oneapi/dpl/2021.6.0/linux/include:/opt/intel/oneapi/dnnl/2022.0.2/cpu_dpcpp_gpu_dpcpp/lib:/opt/intel/oneapi/dev-utilities/2021.5.2/include:/opt/intel/oneapi/dal/2021.5.3/include:/opt/intel/oneapi/ccl/2021.5.1/include/cpu_gpu_dpcpp'
+  CPLUS_INCLUDE_PATH='/opt/intel/oneapi/clck/2021.5.0/include'
+  DAALROOT='/opt/intel/oneapi/dal/2021.5.3'
+  DALROOT='/opt/intel/oneapi/dal/2021.5.3'
+  DAL_MAJOR_BINARY='1'
+  DAL_MINOR_BINARY='1'
+  DNNLROOT='/opt/intel/oneapi/dnnl/2022.0.2/cpu_dpcpp_gpu_dpcpp'
+  DPL_ROOT='/opt/intel/oneapi/dpl/2021.6.0'
+  FI_PROVIDER_PATH='/opt/intel/oneapi/mpi/2021.5.1//libfabric/lib/prov:/usr/lib64/libfabric'
+  FPGA_VARS_ARGS=''
+  FPGA_VARS_DIR='/opt/intel/oneapi/compiler/2022.0.2/linux/lib/oclfpga'
+  GDB_INFO='/opt/intel/oneapi/debugger/2021.5.0/documentation/info/'
+  INFOPATH='/opt/intel/oneapi/debugger/2021.5.0/gdb/intel64/lib'
+  INSPECTOR_2022_DIR='/opt/intel/oneapi/inspector/2022.0.0'
+  INTELFPGAOCLSDKROOT='/opt/intel/oneapi/compiler/2022.0.2/linux/lib/oclfpga'
+  INTEL_LICENSE_FILE='/opt/intel/licenses:/root/intel/licenses:/opt/intel/oneapi/clck/2021.5.0/licensing:/opt/intel/licenses:/root/intel/licenses:/Users/Shared/Library/Application Support/Intel/Licenses'
+  INTEL_PYTHONHOME='/opt/intel/oneapi/debugger/2021.5.0/dep'
+  IPPCP_TARGET_ARCH='intel64'
+ PATH=/opt/AM4:/opt/intel/oneapi/vpl/2022.0.0/bin:/opt/intel/oneapi/mpi/2021.5.0//libfabric/bin:/opt/intel/oneapi/mpi/2021.5.0//bin:/opt/intel/oneapi/mkl/2022.0.1/bin/intel64:/opt/intel/oneapi/itac/2021.5.0/bin:/opt/intel/oneapi/inspector/2022.0.0/bin64:/opt/intel/oneapi/dpcpp-ct/2022.0.0/bin:/opt/intel/oneapi/dev-utilities/2021.5.1/bin:/opt/intel/oneapi/debugger/2021.5.0/gdb/intel64/bin:/opt/intel/oneapi/compiler/2022.0.1/linux/lib/oclfpga/bin:/opt/intel/oneapi/compiler/2022.0.1/linux/bin/intel64:/opt/intel/oneapi/compiler/2022.0.1/linux/bin:/opt/intel/oneapi/clck/2021.5.0/bin/intel64:/spack/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ LIBRARY_PATH=/opt/intel/oneapi/vpl/2022.0.0/lib:/opt/intel/oneapi/tbb/2021.5.0/env/../lib/intel64/gcc4.8:/opt/intel/oneapi/mpi/2021.5.0//libfabric/lib:/opt/intel/oneapi/mpi/2021.5.0//lib/release:/opt/intel/oneapi/mpi/2021.5.0//lib:/opt/intel/oneapi/mkl/2022.0.1/lib/intel64:/opt/intel/oneapi/ipp/2021.5.1/lib/intel64:/opt/intel/oneapi/ippcp/2021.5.0/lib/intel64:/opt/intel/oneapi/ipp/2021.5.1/lib/intel64:/opt/intel/oneapi/dnnl/2022.0.1/cpu_dpcpp_gpu_dpcpp/lib:/opt/intel/oneapi/dal/2021.5.1/lib/intel64:/opt/intel/oneapi/compiler/2022.0.1/linux/compiler/lib/intel64_lin:/opt/intel/oneapi/compiler/2022.0.1/linux/lib:/opt/intel/oneapi/clck/2021.5.0/lib/intel64:/opt/intel/oneapi/ccl/2021.5.0/lib/cpu_gpu_dpcpp
+ LD_LIBRARY_PATH=/opt/intel/oneapi/vpl/2022.0.0/lib:/opt/intel/oneapi/tbb/2021.5.0/env/../lib/intel64/gcc4.8:/opt/intel/oneapi/mpi/2021.5.0//libfabric/lib:/opt/intel/oneapi/mpi/2021.5.0//lib/release:/opt/intel/oneapi/mpi/2021.5.0//lib:/opt/intel/oneapi/mkl/2022.0.1/lib/intel64:/opt/intel/oneapi/itac/2021.5.0/slib:/opt/intel/oneapi/ipp/2021.5.1/lib/intel64:/opt/intel/oneapi/ippcp/2021.5.0/lib/intel64:/opt/intel/oneapi/ipp/2021.5.1/lib/intel64:/opt/intel/oneapi/dnnl/2022.0.1/cpu_dpcpp_gpu_dpcpp/lib:/opt/intel/oneapi/debugger/2021.5.0/gdb/intel64/lib:/opt/intel/oneapi/debugger/2021.5.0/libipt/intel64/lib:/opt/intel/oneapi/debugger/2021.5.0/dep/lib:/opt/intel/oneapi/dal/2021.5.1/lib/intel64:/opt/intel/oneapi/compiler/2022.0.1/linux/lib:/opt/intel/oneapi/compiler/2022.0.1/linux/lib/x64:/opt/intel/oneapi/compiler/2022.0.1/linux/lib/oclfpga/host/linux64/lib:/opt/intel/oneapi/compiler/2022.0.1/linux/compiler/lib/intel64_lin:/opt/intel/oneapi/ccl/2021.5.0/lib/cpu_gpu_dpcpp
