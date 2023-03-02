@@ -1,0 +1,129 @@
+FROM ecpe4s/ubuntu20.04-oneapi-x86_64:22.02
+
+#COPY /compilers_intel_ubuntu20.04.yaml /spack/etc/spack/linux/compilers.yaml
+COPY spack_intel_gfdl_model.yaml /spack.yaml
+RUN ls
+
+RUN export SPACK_DISABLE_LOCAL_CONFIG=1 \
+ && export SPACK_USER_CACHE_PATH=/tmp/_spack_cache \
+ && . /spack/share/spack/setup-env.sh \
+ && spack -e . concretize -f | tee concretize.log \
+ && spack -e . buildcache keys -it \
+ && spack -e . install --cache-only \
+ && spack clean -a
+
+## Set up srcdir
+RUN mkdir -p /apps/am5/am5f1a0r0/am5f1a0r0_compile/src
+## Check out code
+RUN cd /apps/am5/am5f1a0r0/am5f1a0r0_compile/src && \
+git clone -q --recursive -b 2022.01 https://github.com/NOAA-GFDL/FMS.git && \
+git clone -q --recursive -b 2022.01 http://gitlab.gfdl.noaa.gov/fms/am5_phys.git && \
+git clone -q --recursive -b 2022.01 https://github.com/NOAA-GFDL/GFDL_atmos_cubed_sphere.git && \
+git clone -q --recursive -b main https://github.com/NOAA-GFDL/atmos_drivers.git && \
+git clone -q --recursive -b 2021.02 http://gitlab.gfdl.noaa.gov/fms/ice_sis.git && \
+git clone -q --recursive -b 2021.02 https://github.com/NOAA-GFDL/ice_param.git && \
+git clone -q --recursive -b land_lad2_2021.02 http://gitlab.gfdl.noaa.gov/fms/land_lad2.git && \
+git clone -q --recursive -b 2021.02 https://github.com/NOAA-GFDL/ocean_BGC.git && \
+          git clone -b dev/gfdl/2018.04.06 https://github.com/NOAA-GFDL/MOM6-examples.git mom6 && \
+          cd mom6 && \
+          git checkout dev/gfdl/2018.04.06  && \
+          git submodule init src/MOM6 src/SIS2 src/icebergs tools/python/MIDAS && \
+          git clone --recursive https://github.com/NOAA-GFDL/MOM6.git src/MOM6 && \
+          git clone             https://github.com/NOAA-GFDL/SIS2.git src/SIS2 && \
+          git clone             https://github.com/NOAA-GFDL/icebergs.git src/icebergs && \
+          git submodule update && \
+            ln -s /lustre/f2/pdata/gfdl/gfdl_O/datasets/ .datasets && \
+ cd /apps/am5/am5f1a0r0/am5f1a0r0_compile/src && \
+git clone -q --recursive -b 2022.01 https://github.com/NOAA-GFDL/FMScoupler.git
+## Install mkmf :-(
+RUN cd /apps \
+&& git clone --recursive https://github.com/NOAA-GFDL/mkmf \
+&& cp mkmf/bin/* /usr/local/bin
+## Set up build
+RUN mkdir -p /apps/am5/am5f1a0r0/am5f1a0r0_compile/exec
+# FMS
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/fms \
+&& list_paths -l -o $bld_dir/fms/pathnames_fms $src_dir/FMS \
+&& cd $bld_dir/fms \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libfms.a -t $mkmf_template -c "-DINTERNAL_FILE_NML -Duse_libMPI -Duse_netCDF" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/fms/pathnames_fms
+#am5_phys
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/am5_phys \
+&& list_paths -l -o $bld_dir/am5_phys/pathnames_am5_phys $src_dir/am5_phys \
+&& cd $bld_dir/am5_phys \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libam5_phys.a -t $mkmf_template -c "-DINTERNAL_FILE_NML" -o "-I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/am5_phys/pathnames_am5_phys
+#atmos_cubed_sphere
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/atmos_cubed_sphere \
+&& list_paths -l -o $bld_dir/atmos_cubed_sphere/pathnames_atmos_cubed_sphere $src_dir/GFDL_atmos_cubed_sphere/driver/GFDL $src_dir/GFDL_atmos_cubed_sphere/model $src_dir/GFDL_atmos_cubed_sphere/driver/SHiELD/cloud_diagnosis.F90 $src_dir/GFDL_atmos_cubed_sphere/driver/SHiELD/gfdl_cloud_microphys.F90 $src_dir/GFDL_atmos_cubed_sphere/tools $src_dir/GFDL_atmos_cubed_sphere/GFDL_tools \
+&& cd $bld_dir/atmos_cubed_sphere \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libatmos_cubed_sphere.a -t $mkmf_template -c "-DINTERNAL_FILE_NML -DSPMD -DCLIMATE_NUDGE" -o "-I$bld_dir/am5_phys -I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/atmos_cubed_sphere/pathnames_atmos_cubed_sphere
+#atmos_dyn
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/atmos_dyn \
+&& list_paths -l -o $bld_dir/atmos_dyn/pathnames_atmos_dyn $src_dir/atmos_drivers/coupled \
+&& cd $bld_dir/atmos_dyn \
+&&mkmf -m Makefile -a $src_dir -b $bld_dir -p libatmos_dyn.a -t $mkmf_template -c "-DINTERNAL_FILE_NML -DSPMD -DCLIMATE_NUDGE" -o "-I$bld_dir/atmos_cubed_sphere -I$bld_dir/am5_phys -I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/atmos_dyn/pathnames_atmos_dyn
+
+#ice_sis
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/ice_sis \
+&& list_paths -l -o $bld_dir/ice_sis/pathnames_ice_sis $src_dir/ice_sis \
+&& cd $bld_dir/ice_sis \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libice_sis.a -t $mkmf_template -c "-DINTERNAL_FILE_NML -Duse_netCDF" -o "-I$bld_dir/ice_param -I$bld_dir/mom6 -I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/ice_sis/pathnames_ice_sis
+#ice_param
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/ice_param \
+&& list_paths -l -o $bld_dir/ice_param/pathnames_ice_param $src_dir/ice_param \
+&& cd $bld_dir/ice_param \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libice_param.a -t $mkmf_template -c "-DINTERNAL_FILE_NML -Duse_netCDF" -o "-I$bld_dir/mom6 -I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/ice_param/pathnames_ice_param
+
+#land_lad2
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/land_lad2 \
+&& list_paths -l -o $bld_dir/land_lad2/pathnames_land_lad2 $src_dir/land_lad2 \
+&& cd $bld_dir/land_lad2 \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libland_lad2.a -t $mkmf_template --use-cpp -c "-DINTERNAL_FILE_NML -nostdinc" -o "-I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/land_lad2/pathnames_land_lad2
+
+#mom6
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/mom6 \
+&& list_paths -l -o $bld_dir/mom6/pathnames_mom6 $src_dir/mom6/src/MOM6/config_src/dynamic $src_dir/mom6/src/MOM6/config_src/coupled_driver $src_dir/mom6/src/MOM6/src/*/ $src_dir/mom6/src/MOM6/src/*/*/ $src_dir/ocean_BGC/generic_tracers $src_dir/ocean_BGC/mocsy/src \
+&& cd $bld_dir/mom6 \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libmom6.a -t $mkmf_template -c "-DINTERNAL_FILE_NML -DMAX_FIELDS_=100 -DNOT_SET_AFFINITY -D_USE_MOM6_DIAG -D_USE_GENERIC_TRACER -DUSE_PRECISION=2" -o "-I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/mom6/pathnames_mom6
+
+# coupler
+RUN bld_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+&& src_dir=/apps/am5/am5f1a0r0/am5f1a0r0_compile/src \
+&& mkmf_template=/apps/mkmf/tmplates/hpcme-intel21.mk \
+&& mkdir -p $bld_dir/coupler \
+&& list_paths -l -o $bld_dir/coupler/pathnames_coupler $src_dir/FMScoupler/full $src_dir/FMScoupler/shared \
+&& cd $bld_dir/coupler \
+&& mkmf -m Makefile -a $src_dir -b $bld_dir -p libcoupler.a -t $mkmf_template -c "-DINTERNAL_FILE_NML" -o "-I$bld_dir/ice_sis -I$bld_dir/atmos_dyn -I$bld_dir/ice_param -I$bld_dir/mom6 -I$bld_dir/am5_phys -I$bld_dir/land_lad2 -I$bld_dir/fms" -IFMS/fms2_io/include -IFMS/include -IFMS/mpp/include -Imom6/src/MOM6/pkg/CVMix-src/include $bld_dir/coupler/pathnames_coupler
+
+### Run make
+COPY Makefile.am5 /apps/am5/am5f1a0r0/am5f1a0r0_compile/exec/Makefile
+RUN cd /apps/am5/am5f1a0r0/am5f1a0r0_compile/exec \
+ && . /opt/intel/oneapi/setvars.sh \
+ && . /spack/share/spack/setup-env.sh \
+ && spack compiler find \
+ && spack load libtool \
+ && spack load netcdf-fortran \
+ && make -j 4 OPENMP=on NETCDF=3 fms_am5f1a0r0_compile.x

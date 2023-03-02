@@ -1,0 +1,80 @@
+# Makefile for Experiment 'am5f1a0r0_compile'
+
+SRCROOT = /apps/am5/am5f1a0r0/am5f1a0r0_compile/src/
+BUILDROOT = /apps/am5/am5f1a0r0/am5f1a0r0_compile/exec/
+STAGEDIR = /lustre/f2/scratch/Thomas.Robinson/ptmp/am5/am5f1a0r0/am5f1a0r0_compile//ncrc/home2/Thomas.Robinson/am5/am5f1a0r0/am5f1a0r0_compile/ncrc5.intel22-classic-prod-openmp-container/exec/
+
+MK_TEMPLATE = /apps/mkmf/templates/hpcme-intel21.mk
+include $(MK_TEMPLATE)
+
+fms_am5f1a0r0_compile.x: coupler/libcoupler.a atmos_dyn/libatmos_dyn.a ice_sis/libice_sis.a atmos_cubed_sphere/libatmos_cubed_sphere.a ice_param/libice_param.a am5_phys/libam5_phys.a land_lad2/libland_lad2.a mom6/libmom6.a fms/libfms.a
+	$(LD) $^ $(LDFLAGS) -o $@ $(STATIC_LIBS)
+
+fms/libfms.a:  FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=fms $(@F) 
+
+am5_phys/libam5_phys.a: fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=am5_phys $(@F) 
+
+atmos_cubed_sphere/libatmos_cubed_sphere.a: am5_phys/libam5_phys.a fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=atmos_cubed_sphere $(@F) 
+
+atmos_dyn/libatmos_dyn.a: atmos_cubed_sphere/libatmos_cubed_sphere.a am5_phys/libam5_phys.a fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=atmos_dyn $(@F) 
+
+ice_sis/libice_sis.a: ice_param/libice_param.a mom6/libmom6.a fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=ice_sis $(@F) 
+
+ice_param/libice_param.a: mom6/libmom6.a fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=ice_param $(@F) 
+
+land_lad2/libland_lad2.a: fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=land_lad2 $(@F) 
+
+mom6/libmom6.a: fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE) OPENMP="" --directory=mom6 $(@F) 
+
+coupler/libcoupler.a: ice_sis/libice_sis.a atmos_dyn/libatmos_dyn.a ice_param/libice_param.a mom6/libmom6.a land_lad2/libland_lad2.a am5_phys/libam5_phys.a fms/libfms.a FORCE
+	$(MAKE) SRCROOT=$(SRCROOT) BUILDROOT=$(BUILDROOT) MK_TEMPLATE=$(MK_TEMPLATE)  --directory=coupler $(@F) 
+
+FORCE:
+
+stage:
+	install -d $(STAGEDIR)
+	install -m 555 fms_am5f1a0r0_compile.x $(STAGEDIR)
+
+clean:
+	$(MAKE) --directory=fms clean
+	$(MAKE) --directory=am5_phys clean
+	$(MAKE) --directory=atmos_cubed_sphere clean
+	$(MAKE) --directory=atmos_dyn clean
+	$(MAKE) --directory=ice_sis clean
+	$(MAKE) --directory=ice_param clean
+	$(MAKE) --directory=land_lad2 clean
+	$(MAKE) --directory=mom6 clean
+	$(MAKE) --directory=coupler clean
+
+localize:
+	$(MAKE) -f $(BUILDROOT)fms/Makefile localize
+	$(MAKE) -f $(BUILDROOT)am5_phys/Makefile localize
+	$(MAKE) -f $(BUILDROOT)atmos_cubed_sphere/Makefile localize
+	$(MAKE) -f $(BUILDROOT)atmos_dyn/Makefile localize
+	$(MAKE) -f $(BUILDROOT)ice_sis/Makefile localize
+	$(MAKE) -f $(BUILDROOT)ice_param/Makefile localize
+	$(MAKE) -f $(BUILDROOT)land_lad2/Makefile localize
+	$(MAKE) -f $(BUILDROOT)mom6/Makefile localize
+	$(MAKE) -f $(BUILDROOT)coupler/Makefile localize
+
+distclean:
+	$(RM) -r fms
+	$(RM) -r am5_phys
+	$(RM) -r atmos_cubed_sphere
+	$(RM) -r atmos_dyn
+	$(RM) -r ice_sis
+	$(RM) -r ice_param
+	$(RM) -r land_lad2
+	$(RM) -r mom6
+	$(RM) -r coupler
+	$(RM) fms_am5f1a0r0_compile.x
+	$(RM) Makefile
+
